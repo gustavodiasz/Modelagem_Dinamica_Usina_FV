@@ -67,7 +67,7 @@ class ReconstrutorUsinaSolar:
         Aplica a correção usando a discretização de Euler.
         Fórmula: P[t] = alpha * (K*G) + (1-alpha) * P[t-1]
         """
-        NOME_COLUNA = 'P_Euler'
+        NOME_COLUNA = 'P_Corrigido_Por_Euler'
         df_out, mask_falha, blocos = self._preparar_dataframe(df, NOME_COLUNA)
         grupos_falha = df_out[mask_falha].groupby(blocos)
         count = 0
@@ -118,7 +118,7 @@ class ReconstrutorUsinaSolar:
         Aplica a correção usando a Solução Analítica Exata (Irradiação constante no intervalo).
         Fórmula: P(t) = P(t-1)*e^(-dt/tau) + K*G(t)*(1 - e^(-dt/tau))
         """
-        NOME_COLUNA = 'P_Analitica'
+        NOME_COLUNA = 'P_Corrigido_Por_Integral_Analítica'
         df_out, mask_falha, blocos = self._preparar_dataframe(df, NOME_COLUNA)
         grupos_falha = df_out[mask_falha].groupby(blocos)
         count = 0
@@ -168,7 +168,7 @@ class ReconstrutorUsinaSolar:
         Assume que G varia linearmente entre t-1 e t
         Fórmula: P(t) = P(t-1)*e^(-dt/tau) + (K/tau * dt * G_medio * e^(-dt/2tau))
         """
-        NOME_COLUNA = 'P_Integral_Midpoint'
+        NOME_COLUNA = 'P_Corrigido_Por_G_Constante_Na_Falha'
         df_out, mask_falha, blocos = self._preparar_dataframe(df, NOME_COLUNA)
         grupos_falha = df_out[mask_falha].groupby(blocos)
         count = 0

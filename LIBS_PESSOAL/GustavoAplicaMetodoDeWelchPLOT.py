@@ -5,14 +5,17 @@ from scipy import signal
 import os
 
 class MetodoDeWelch:
-    def __init__(self, col_G='G'):
-        self.col_G = col_G
+    def __init__(self):
+        self.col_G = None
         self.frec = None
         self.ampli_G = None
         self.ampli_P = None
         
-    def AplicaMetodoDeWelch(self, df, coluna_potencia, win_size, NOME_COLUNA_PARA_PLOT='Informe O Nome Da Coluna Para O Plot', minuto_correção='minutos_correcao_potencia'):
+    def AplicaMetodoDeWelch(self, df, coluna_potencia, coluna_iradiancia, win_size, NOME_COLUNA_DE_POTENCIA_PARA_PLOT='Informe O Nome Da Coluna De Potencia Para O Plot', 
+NOME_COLUNA_DE_IRRADIANCIA_PARA_PLOT='Informe O Nome Da Coluna De Irradiancia Para O Plot',
+minuto_correção='minutos_correcao_potencia'):
         config_visual = {
+            'figure.figsize': (12, 6),
             'font.family': 'serif',
             'font.serif': ['Times New Roman'],
             'font.size': 12,
@@ -25,10 +28,8 @@ class MetodoDeWelch:
         }
         
         with plt.rc_context(config_visual):
-            df = df.interpolate(method='linear')
-            df = df.fillna(0) 
             
-            g_pu = (df[self.col_G] / 1000).to_numpy()
+            g_pu = (df[coluna_iradiancia] / 1000).to_numpy()
             p_pu = (df[coluna_potencia] / 2500).to_numpy()
             
             # Parâmetros do Método de Welch
@@ -48,16 +49,21 @@ class MetodoDeWelch:
             self.ampli_P = Spp
         
             # Plotagem
-            plt.figure(figsize=(10, 6))
-            plt.loglog(f_g, Sgg, label='Irradiância (G)', alpha=0.8, color='orange')
-            plt.loglog(f_p, Spp, label=NOME_COLUNA_PARA_PLOT, alpha=0.8, color='blue')
+            plt.loglog(f_g, Sgg, label=NOME_COLUNA_DE_IRRADIANCIA_PARA_PLOT, alpha=0.8, color='orange')
+            plt.loglog(f_p, Spp, label=NOME_COLUNA_DE_POTENCIA_PARA_PLOT, alpha=0.8, color='blue')
             
             plt.xlabel('Frequência [Hz]')
             plt.ylabel('PSD [PU²/Hz]')
             
-            plt.title(f'Espectro de Potência - Janela de {int(win_size/(60*24))} dia(s).\n'
-                      f'Irradiância (G) Vs {NOME_COLUNA_PARA_PLOT}\n'
-                      f'Com Correção de falhas <= {minuto_correção} min.')
+            # Formatação do Título Corrigida para Negrito e Caracteres Especiais
+            nome_g_limpo = NOME_COLUNA_DE_IRRADIANCIA_PARA_PLOT.replace("_", r"\_")
+            nome_p_limpo = NOME_COLUNA_DE_POTENCIA_PARA_PLOT.replace("_", r"\_")
+
+            t1 = f'Espectro De Potência Determinado A Partir do Método de Welch Considerada Uma Janela de {int(win_size/(60*24))} dia(s).\n'
+            t2 = r'Espectro do Sinal $\mathbf{' + nome_g_limpo + r'}$ Vs Espectro do Sinal $\mathbf{' + nome_p_limpo + r'}$' + '\n'
+            t3 = rf'Espectros feito Após Correções Nas Falhas $\leq$ que {minuto_correção} Minutos Nos Dados de Potência $= 0$ Em período Diúrno.'
+            
+            plt.title(t1 + t2 + t3)
             
             # Frequências chave
             f_dia    = 1/(24*3600)
@@ -78,6 +84,6 @@ class MetodoDeWelch:
             if not os.path.exists(pasta_saida):
                 os.makedirs(pasta_saida)
                 
-            plt.savefig(f'{pasta_saida}/ESPECTRO_{NOME_COLUNA_PARA_PLOT}.png', format='png', dpi=600, bbox_inches='tight')
+            plt.savefig(f'{pasta_saida}/ESPECTRO_{NOME_COLUNA_DE_IRRADIANCIA_PARA_PLOT}_Vs_{NOME_COLUNA_DE_POTENCIA_PARA_PLOT}.png', format='png', dpi=2*600, bbox_inches='tight')
             plt.show()
             plt.close()
