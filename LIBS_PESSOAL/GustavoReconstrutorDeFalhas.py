@@ -216,5 +216,71 @@ class ReconstrutorUsinaSolar:
                 t_anterior = t_atual
             
             count += 1
+
+        return df_out
+
+    # =========================================================================
+    # MÉTODO 4: ANALÍTICO com VETOR K (ATUALIZADO PARA IGNORAR G_ANTERIOR = NaN)
+    # =========================================================================
+    
+    def reconstruir_potencia_integral_analitica(self, df, col_k='Ganho Da Usina (K)', nome_col_saida='P_Corrigido'):
+        """
+        Reconstrói as falhas de Potência propagando a inércia da usina através da
+        solução exata da equação diferencial (Analítica).
+        Preserva a coluna original e retorna o DataFrame com a nova coluna corrigida.
+        """
+        df_out = df.copy()
+        df_out[nome_col_saida] = df_out[self.col_p].copy()
+        
+        fator_exp = np.exp(-60.0 / self.tau)
+        alfa_exato = 1 - fator_exp
+    
+        mask_falha = (df_out[self.col_p] == 0) & (df_out[self.col_g] > 0)
+        
+        if not mask_falha.any():
+            print("Nenhuma falha para reconstruir encontrada.")
+            return df_out
+    
+        blocos_falha = (mask_falha != mask_falha.shift()).cumsum()
+        grupos_de_falha = df_out[mask_falha].groupby(blocos_falha)
+    
+        for _, dados_bloco in grupos_de_falha:
             
+            idx_inicio = dados_bloco.index[0]
+            pos_inicio = df_out.index.get_loc(idx_inicio)
+            
+            if pos_inicio == 0: continue # Se a falha for na linha 0, não tem passado para usar
+    
+            p_anterior = df_out.iloc[pos_inicio - 1][nome_col_saida]
+            g_anterior = df_out.iloc[pos_inicio - 1][self.col_g]
+    
+            for t_atual in dados_bloco.index:
+                g_atual = df_out.loc[t_atual, self.col_g]
+                k_atual = df_out.loc[t_atual, col_k]
+                
+                if pd.isna(k_atual): continue
+                
+                # Ajusta o G médio: se não há passado válido, a média é o presente
+                if pd.isna(g_anterior):
+                    g_medio = g_atual
+                else:
+                    g_medio = (g_atual + g_anterior) / 2
+                    
+                # Ajusta o P inicial: se P_anterior é inválido, cria um novo estado 
+                # baseado no G que estiver disponível (evitando multiplicar K por NaN)
+                if pd.isna(p_anterior) or p_anterior <= 0:
+                    g_referencia = g_atual if pd.isna(g_anterior) else g_anterior
+                    p_anterior = k_atual * g_referencia
+                    
+                # APLICAÇÃO DA RESOLUCAO ANALÍTICA
+                termo_inercia = p_anterior * fator_exp
+                termo_entrada = k_atual * g_medio * alfa_exato
+                p_novo = termo_inercia + termo_entrada
+                
+                df_out.loc[t_atual, nome_col_saida] = p_novo
+                
+                # Atualiza para o próximo loop (neste ponto, p_novo e g_atual NUNCA são NaNs)
+                p_anterior = p_novo
+                g_anterior = g_atual
+    
         return df_out
