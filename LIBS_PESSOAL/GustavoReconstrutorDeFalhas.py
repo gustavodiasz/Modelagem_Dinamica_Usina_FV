@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 class ReconstrutorUsinaSolar:
-    def __init__(self, area_hectares=1.48, limite_minutos=15, janela_vizinhos=10, col_p='P', col_g='G'):
+    def __init__(self, area_hectares=5.15, limite_minutos=15, janela_vizinhos=10, col_p='P', col_g='G'):
         """
         Classe para correção de falhas em dados de usinas solares usando filtro Low-Pass.
         
@@ -282,5 +282,94 @@ class ReconstrutorUsinaSolar:
                 # Atualiza para o próximo loop (neste ponto, p_novo e g_atual NUNCA são NaNs)
                 p_anterior = p_novo
                 g_anterior = g_atual
+    
+        return df_out
+
+    # =========================================================================
+    # MÉTODO 5: ANALÍTICO com K CONSTANTE 
+    # =========================================================================
+    
+    def reconstruir_para_k_constante(self, df, k_constante, tau=None, fc=None, nome_col_saida='P_Corrigido_K_Constante'):
+        """
+        Reconstrói as falhas de Potência propagando a inércia da usina através da
+        solução exata da equação diferencial (Analítica), utilizando um K fixo.
+        
+        Parâmetros:
+        :param df: DataFrame com os dados.
+        :param k_constante: Ganho estático da usina (ex: 0.797).
+        :param tau: Constante de tempo em segundos (opcional).
+        :param fc: Frequência de corte em Hz (opcional, será usada para calcular tau se fornecida).
+        :param nome_col_saida: Nome da nova coluna com os dados reconstruídos.
+        """
+        # 1. Determinação da inércia (tau)
+        if tau is not None:
+            tau_usado = tau
+        elif fc is not None:
+            tau_usado = 1 / (2 * np.pi * fc)
+        else:
+            tau_usado = self.tau # Usa o tau calculado pela área na inicialização
+            
+        df_out = df.copy()
+        df_out[nome_col_saida] = df_out[self.col_p].copy()
+        
+        # 2. Identificação das falhas
+        mask_falha = (df_out[self.col_p] <= 0) & (df_out[self.col_g] > 0)
+        
+        if not mask_falha.any():
+            print("Nenhuma falha para reconstruir encontrada.")
+            return df_out
+    
+        blocos_falha = (mask_falha != mask_falha.shift()).cumsum()
+        grupos_de_falha = df_out[mask_falha].groupby(blocos_falha)
+    
+        # 3. Loop de reconstrução bloco a bloco
+        for _, dados_bloco in grupos_de_falha:
+            
+            idx_inicio = dados_bloco.index[0]
+            pos_inicio = df_out.index.get_loc(idx_inicio)
+            
+            if pos_inicio == 0: 
+                continue # Se a falha for na primeira linha, não há histórico inercial
+    
+            # Captura o estado imediatamente anterior à falha
+            idx_anterior = df_out.index[pos_inicio - 1]
+            p_anterior = df_out.loc[idx_anterior, nome_col_saida]
+            g_anterior = df_out.loc[idx_anterior, self.col_g]
+            t_anterior = idx_anterior
+    
+            for t_atual in dados_bloco.index:
+                
+                # Dinâmica do passo de tempo (dt)
+                delta_t = (t_atual - t_anterior).total_seconds()
+                if delta_t <= 0: delta_t = 60.0
+                
+                # Coeficientes da EDO
+                fator_exp = np.exp(-delta_t / tau_usado)
+                alfa_exato = 1 - fator_exp
+                
+                g_atual = df_out.loc[t_atual, self.col_g]
+                
+                # Ajuste do G médio: se não há passado válido, a média é o próprio presente
+                if pd.isna(g_anterior):
+                    g_medio = g_atual
+                else:
+                    g_medio = (g_atual + g_anterior) / 2
+                    
+                # Ajuste do P inicial: se a usina estava desligada antes, parte do regime permanente
+                if pd.isna(p_anterior) or p_anterior <= 0:
+                    g_referencia = g_atual if pd.isna(g_anterior) else g_anterior
+                    p_anterior = k_constante * g_referencia
+                    
+                # --- APLICAÇÃO DA SOLUÇÃO ANALÍTICA ---
+                termo_inercia = p_anterior * fator_exp
+                termo_entrada = k_constante * g_medio * alfa_exato
+                p_novo = termo_inercia + termo_entrada
+                
+                df_out.loc[t_atual, nome_col_saida] = p_novo
+                
+                # Atualiza os estados para a próxima iteração do loop
+                p_anterior = p_novo
+                g_anterior = g_atual
+                t_anterior = t_atual
     
         return df_out
