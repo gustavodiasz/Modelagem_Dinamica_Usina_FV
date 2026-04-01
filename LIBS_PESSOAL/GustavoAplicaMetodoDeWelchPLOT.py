@@ -39,8 +39,8 @@ class MetodoDeWelch:
         """Gera EXCLUSIVAMENTE o gráfico de Densidade Espectral de Potência (PSD)"""
 
         with plt.rc_context(self._get_config_visual()):
-            g_pu = (df[coluna_iradiancia] / 1000).to_numpy()
-            p_pu = (df[coluna_potencia] / 2500).to_numpy()
+            g_pu = (df[coluna_iradiancia] / 1).to_numpy()
+            p_pu = (df[coluna_potencia] / 1).to_numpy()
 
             fs = 1/60
             win_size = int(win_size)
