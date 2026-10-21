@@ -80,6 +80,7 @@ class MetodoDeWelch:
 
             plt.show()
             plt.close()
+            return f_g, Sgg, f_p, Spp
 
     def plotar_funcao_transferencia(self, df, coluna_potencia, coluna_iradiancia, win_size, minuto_correcao='[Sem Correção]'):
         """Gera EXCLUSIVAMENTE o diagrama de Bode |H(jw)| e determina K e fc"""
